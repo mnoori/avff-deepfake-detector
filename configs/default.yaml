@@ -1,0 +1,28 @@
+data:
+  # Data paths (to be filled by user)
+  train_videos: []
+  train_labels: []
+  val_videos: []
+  val_labels: []
+  
+  # Data processing parameters
+  frame_count: 16  # Number of frames to sample from each video
+  image_size: [224, 224]  # Size to resize frames to
+  audio_length: 1.0  # Length of audio segment in seconds
+  sample_rate: 16000  # Audio sample rate
+
+training:
+  # Training parameters
+  batch_size: 32
+  num_workers: 4
+  num_epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  
+  # Logging and checkpointing
+  log_dir: 'logs'
+  checkpoint_dir: 'checkpoints'
+  
+  # Early stopping
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001 
