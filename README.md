@@ -1,69 +1,95 @@
-# AVFF: Audio-Visual Feature Fusion for Video Deepfake Detection
+# AVFF Deepfake Detector
 
-This project implements the Audio-Visual Feature Fusion (AVFF) approach for video deepfake detection as described in the CVPR 2024 paper "AVFF: Audio-Visual Feature Fusion for Video Deepfake Detection".
-
-## Overview
-
-AVFF is a novel approach that combines audio and visual features to improve the robustness of deepfake detection. The method leverages the inherent relationship between audio and visual modalities to better identify manipulated content.
-
-## Features
-
-- Audio-visual feature extraction and fusion
-- Multi-modal deepfake detection
-- Support for various video formats
-- Pre-trained model weights (coming soon)
+An Audio-Visual Feature Fusion approach for deepfake video detection using both audio and visual features.
 
 ## Installation
 
-1. Clone this repository:
+1. Clone the repository:
 ```bash
 git clone https://github.com/yourusername/avff-deepfake-detector.git
 cd avff-deepfake-detector
 ```
 
-2. Install the required dependencies:
+2. Install the package:
 ```bash
-pip install -r requirements.txt
+pip install -e .
+```
+
+## Usage
+
+### Basic Usage
+
+```python
+from avff import AVFFModel, VideoProcessor, AudioProcessor
+
+# Initialize processors
+video_processor = VideoProcessor()
+audio_processor = AudioProcessor()
+
+# Process video and audio
+video_frames = video_processor.extract_frames("path/to/video.mp4")
+audio_features = audio_processor.extract_audio("path/to/video.mp4")
+
+# Initialize model
+model = AVFFModel()
+
+# Make prediction
+prediction = model(audio_features, video_frames)
+```
+
+### Downloading YouTube Videos
+
+```python
+from avff import download_youtube_video
+
+# Download a YouTube video
+video_path = download_youtube_video("https://www.youtube.com/watch?v=your_video_id")
+```
+
+### Visualization
+
+```python
+from avff import visualize_results
+
+# Visualize results
+visualize_results(
+    video_path="path/to/video.mp4",
+    audio_features=audio_features,
+    visual_features=video_frames,
+    prediction=prediction,
+    save_path="results.png"
+)
 ```
 
 ## Project Structure
 
 ```
 avff-deepfake-detector/
-├── data/               # Dataset directory
-├── models/            # Model implementations
-├── utils/             # Utility functions
-├── train.py           # Training script
-├── evaluate.py        # Evaluation script
-└── requirements.txt   # Project dependencies
+├── avff/
+│   ├── __init__.py
+│   ├── models.py
+│   ├── preprocessing.py
+│   └── utils.py
+├── example.py
+├── setup.py
+└── README.md
 ```
 
-## Usage
+## Dependencies
 
-1. Prepare your dataset in the `data` directory
-2. Train the model:
-```bash
-python train.py --config configs/default.yaml
-```
-
-3. Evaluate the model:
-```bash
-python evaluate.py --model_path checkpoints/model.pth
-```
-
-## Citation
-
-If you use this code in your research, please cite the original paper:
-
-```bibtex
-@inproceedings{oorloff2024avff,
-    title={AVFF: Audio-Visual Feature Fusion for Video Deepfake Detection},
-    author={Oorloff, et al.},
-    booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-    year={2024}
-}
-```
+- torch >= 1.9.0
+- torchvision >= 0.10.0
+- torchaudio >= 0.9.0
+- transformers >= 4.11.0
+- numpy >= 1.19.5
+- opencv-python >= 4.5.3
+- scipy >= 1.7.1
+- matplotlib >= 3.4.3
+- pytube >= 12.0.0
+- moviepy >= 1.0.3
+- librosa >= 0.8.1
+- tqdm >= 4.62.3
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+MIT License 
