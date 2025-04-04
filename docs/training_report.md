@@ -24,12 +24,12 @@ The training progress was monitored using TensorBoard, tracking the following me
 ### Visualizations
 
 #### Learning Curves
-![Learning Curves](outputs/dfdc/learning_curves.png)
+![Learning Curves](assets/learning_curves.png)
 
 The learning curves show the progression of training and validation loss over the 10 epochs. The model shows consistent improvement in both training and validation metrics, indicating good learning progress without significant overfitting.
 
 #### Training Metrics
-![Training Metrics](outputs/dfdc/training_metrics.png)
+![Training Metrics](assets/training_metrics.png)
 
 The training metrics visualization provides a comprehensive view of the model's performance across different evaluation metrics. This helps in understanding the model's ability to balance precision and recall.
 
@@ -60,10 +60,13 @@ The best model checkpoint was saved based on validation performance. The checkpo
 ## Repository Structure
 ```
 avff-deepfake-detector-1/
+├── docs/
+│   ├── assets/
+│   │   ├── learning_curves.png
+│   │   └── training_metrics.png
+│   └── training_report.md
 ├── outputs/
 │   └── dfdc/
-│       ├── learning_curves.png
-│       ├── training_metrics.png
 │       └── best_model.pth
 ├── checkpoints/
 │   └── dfdc/
