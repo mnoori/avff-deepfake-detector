@@ -1,0 +1,46 @@
+# Dataset configuration
+dataset:
+  train_root: 'train_sample_videos'
+  test_root: 'test_videos'
+  train_metadata: 'train_sample_videos/metadata.json'
+  test_metadata: 'test_videos/metadata.json'
+  frame_count: 16
+  image_size: [224, 224]
+  audio_length: 5.0
+  sample_rate: 16000
+
+# Model configuration
+model:
+  num_classes: 2
+  visual_backbone: 'google/vit-base-patch16-224'
+  audio_backbone: 'facebook/wav2vec2-base-960h'
+  fusion_dim: 1024
+
+# Training configuration
+training:
+  batch_size: 24  # Optimized for 12GB VRAM
+  num_epochs: 1  # Set to 1 for testing
+  learning_rate: 1e-4
+  weight_decay: 1e-5
+  num_workers: 6  # Optimized for RTX 4070
+  output_dir: 'checkpoints'
+  save_frequency: 1
+  mixed_precision: true  # Enable Tensor core usage
+  gradient_accumulation_steps: 1
+  cudnn_benchmark: true  # Enable cuDNN auto-tuner
+  cuda_graph: true  # Enable CUDA graphs for faster training
+
+# Evaluation configuration
+evaluation:
+  batch_size: 48  # Larger batch size for evaluation
+  num_workers: 6  # Match training workers
+  output_dir: 'results'
+  save_predictions: true
+  save_visualizations: true
+  metrics:
+    - log_loss
+    - auc
+    - accuracy
+    - precision
+    - recall
+    - f1 

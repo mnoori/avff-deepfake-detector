@@ -31,6 +31,8 @@ class VideoProcessor:
                 break
                 
             if frame_idx % frame_interval == 0:
+                # Convert BGR to RGB
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 # Resize and preprocess frame
                 frame = cv2.resize(frame, self.target_size)
                 frame = self.transform(frame)
@@ -42,9 +44,11 @@ class VideoProcessor:
         
         # Pad if we don't have enough frames
         while len(frames) < self.num_frames:
-            frames.append(frames[-1])
+            frames.append(frames[-1] if frames else torch.zeros(3, *self.target_size))
             
-        return torch.stack(frames)
+        # Stack frames along a new dimension
+        frames = torch.stack(frames)  # Shape: [num_frames, 3, H, W]
+        return frames
 
 class AudioProcessor:
     def __init__(self, sample_rate=16000, duration=5):
@@ -56,6 +60,10 @@ class AudioProcessor:
         # Extract audio using moviepy
         video = VideoFileClip(video_path)
         audio = video.audio
+        
+        if audio is None:
+            # Return zeros if no audio
+            return torch.zeros(1, self.sample_rate * self.duration)
         
         # Convert to numpy array and normalize
         audio_array = audio.to_soundarray()
@@ -81,4 +89,7 @@ class AudioProcessor:
             padding=True
         )
         
-        return inputs.input_values 
+        # Close the video to free resources
+        video.close()
+        
+        return inputs.input_values.squeeze(0)  # Remove batch dimension 
