@@ -1,9 +1,31 @@
-# Python
+# Data directories
+data/
+datasets/
+dfdc/
+test_videos/
+train_videos/
+
+# Model checkpoints and outputs
+outputs/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.hdf5
+
+# Logs
+logs/
+*.log
+tensorboard_logs/
+
+# Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -15,15 +37,42 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 venv/
-env/
 ENV/
+env/
+.env
+.venv
+deepfake_env/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Temporary files
+tmp/
+temp/
+
+# Dataset
+train_sample_videos/
+*.mp4
+*.avi
+*.mov
+
+# Logs and checkpoints
+results/
+*.log
+*.pth
 
 # IDE
 .idea/
@@ -31,23 +80,5 @@ ENV/
 *.swp
 *.swo
 
-# Dataset
-train_sample_videos/
-test_videos/
-*.mp4
-*.avi
-*.mov
-
-# Logs and checkpoints
-checkpoints/
-results/
-*.log
-*.pth
-
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
 # OS
-.DS_Store
 Thumbs.db 

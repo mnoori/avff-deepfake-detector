@@ -16,13 +16,13 @@ class VideoFrameDataset(Dataset):
                  audio_length: float = 1.0,
                  sample_rate: int = 16000):
         """
-        Dataset for loading video frames and audio segments.
+        Dataset for loading preprocessed video frames and audio segments.
         
         Args:
-            video_paths: List of paths to video files
+            video_paths: List of paths to preprocessed video directories
             labels: List of labels (0 for real, 1 for fake)
             frame_count: Number of frames to sample from each video
-            image_size: Size to resize frames to
+            image_size: Size of frames
             audio_length: Length of audio segment in seconds
             sample_rate: Audio sample rate
         """
@@ -32,68 +32,67 @@ class VideoFrameDataset(Dataset):
         self.image_size = image_size
         self.audio_length = audio_length
         self.sample_rate = sample_rate
-        
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                              std=[0.229, 0.224, 0.225])
-        ])
-        
+    
     def __len__(self):
         return len(self.video_paths)
     
-    def _extract_frames(self, video_path: str) -> torch.Tensor:
-        """Extract frames from video file."""
-        cap = cv2.VideoCapture(video_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        # Sample frames uniformly
-        frame_indices = np.linspace(0, total_frames-1, self.frame_count, dtype=int)
-        frames = []
-        
-        for idx in frame_indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = cv2.resize(frame, self.image_size)
-                frame = self.transform(frame)
-                frames.append(frame)
-        
-        cap.release()
-        return torch.stack(frames)
+    def _load_frames(self, video_dir: str) -> torch.Tensor:
+        """Load preprocessed frames from .pt file."""
+        try:
+            frames_path = os.path.join(video_dir, 'frames.pt')
+            frames = torch.load(frames_path)
+            
+            # Ensure frames have the correct shape (num_frames, channels, height, width)
+            if len(frames.shape) != 4:
+                raise ValueError(f"Expected frames to have 4 dimensions, got {len(frames.shape)}")
+            
+            # Sample frames if we have more than we need
+            if frames.shape[0] > self.frame_count:
+                indices = torch.linspace(0, frames.shape[0]-1, self.frame_count, dtype=torch.long)
+                frames = frames[indices]
+            
+            # Select a random frame from the sequence
+            frame_idx = torch.randint(0, frames.shape[0], (1,))
+            frame = frames[frame_idx].squeeze(0)
+            
+            return frame
+        except Exception as e:
+            print(f"Error loading frames from {video_dir}: {str(e)}")
+            return torch.zeros((3, *self.image_size))
     
-    def _extract_audio(self, video_path: str) -> torch.Tensor:
-        """Extract audio segment from video file."""
-        waveform, sample_rate = torchaudio.load(video_path)
-        
-        # Resample if necessary
-        if sample_rate != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sample_rate, self.sample_rate)
-            waveform = resampler(waveform)
-        
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        
-        # Extract segment of specified length
-        target_length = int(self.audio_length * self.sample_rate)
-        if waveform.shape[1] > target_length:
-            start = torch.randint(0, waveform.shape[1] - target_length, (1,))
-            waveform = waveform[:, start:start + target_length]
-        else:
-            # Pad if audio is shorter than target length
-            pad_length = target_length - waveform.shape[1]
-            waveform = torch.nn.functional.pad(waveform, (0, pad_length))
-        
-        return waveform
+    def _load_audio(self, video_dir: str) -> torch.Tensor:
+        """Load preprocessed audio from .pt file."""
+        try:
+            audio_path = os.path.join(video_dir, 'audio.pt')
+            audio = torch.load(audio_path)
+            
+            # Ensure audio is 2D (channels, samples)
+            if len(audio.shape) == 1:
+                audio = audio.unsqueeze(0)
+            elif len(audio.shape) > 2:
+                raise ValueError(f"Expected audio to have 1 or 2 dimensions, got {len(audio.shape)}")
+            
+            # Extract segment of specified length if needed
+            target_length = int(self.audio_length * self.sample_rate)
+            if audio.shape[1] > target_length:
+                start = torch.randint(0, audio.shape[1] - target_length, (1,))
+                audio = audio[:, start:start + target_length]
+            else:
+                # Pad if audio is shorter than target length
+                pad_length = target_length - audio.shape[1]
+                audio = torch.nn.functional.pad(audio, (0, pad_length))
+            
+            return audio
+        except Exception as e:
+            print(f"Error loading audio from {video_dir}: {str(e)}")
+            return torch.zeros((1, int(self.audio_length * self.sample_rate)))
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        video_path = self.video_paths[idx]
+        video_dir = self.video_paths[idx]
         label = self.labels[idx]
         
-        frames = self._extract_frames(video_path)
-        audio = self._extract_audio(video_path)
+        frames = self._load_frames(video_dir)
+        audio = self._load_audio(video_dir)
         
         return frames, audio, torch.tensor(label, dtype=torch.float32)
 

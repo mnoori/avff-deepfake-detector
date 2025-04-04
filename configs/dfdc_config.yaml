@@ -1,10 +1,22 @@
 # Dataset configuration
 dataset:
-  train_root: 'train_sample_videos'
-  test_root: 'test_videos'
-  train_metadata: 'train_sample_videos/metadata.json'
-  test_metadata: 'test_videos/metadata.json'
-  frame_count: 16
+  train_root: "data/dfdc/train"
+  test_root: "data/dfdc/test"
+  train_metadata: "data/dfdc/train_metadata.json"
+  test_metadata: "data/dfdc/test_metadata.json"
+  frame_count: 8
+  target_size: [224, 224]
+  image_size: [224, 224]
+  audio_length: 5.0
+  sample_rate: 16000
+
+# Data paths
+data:
+  train_videos: "data/dfdc/train"
+  train_labels: "data/dfdc/train_metadata.json"
+  test_videos: "data/dfdc/test"
+  test_labels: "data/dfdc/test_metadata.json"
+  frame_count: 8
   image_size: [224, 224]
   audio_length: 5.0
   sample_rate: 16000
@@ -12,35 +24,46 @@ dataset:
 # Model configuration
 model:
   num_classes: 2
-  visual_backbone: 'google/vit-base-patch16-224'
-  audio_backbone: 'facebook/wav2vec2-base-960h'
-  fusion_dim: 1024
+  audio_backbone: "facebook/wav2vec2-base-960h"
+  visual_backbone: "google/vit-base-patch16-224"
+  fusion_dim: 768
+  dropout: 0.1
 
 # Training configuration
 training:
-  batch_size: 24  # Optimized for 12GB VRAM
-  num_epochs: 1  # Set to 1 for testing
-  learning_rate: 1e-4
-  weight_decay: 1e-5
-  num_workers: 6  # Optimized for RTX 4070
-  output_dir: 'checkpoints'
+  batch_size: 16
+  num_epochs: 10
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  num_workers: 4
+  output_dir: "outputs/dfdc"
+  log_dir: "logs/dfdc"
+  checkpoint_dir: "checkpoints/dfdc"
   save_frequency: 1
-  mixed_precision: true  # Enable Tensor core usage
+  mixed_precision: true
   gradient_accumulation_steps: 1
-  cudnn_benchmark: true  # Enable cuDNN auto-tuner
-  cuda_graph: true  # Enable CUDA graphs for faster training
+  cudnn_benchmark: true
+  cuda_graph: false
+  max_grad_norm: 1.0
+  early_stopping_patience: 20
+  early_stopping_min_delta: 0.001
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
+  log_interval: 1
+  validation_interval: 1
 
 # Evaluation configuration
 evaluation:
-  batch_size: 48  # Larger batch size for evaluation
-  num_workers: 6  # Match training workers
+  batch_size: 16
+  num_workers: 4
   output_dir: 'results'
   save_predictions: true
   save_visualizations: true
   metrics:
-    - log_loss
-    - auc
-    - accuracy
-    - precision
-    - recall
-    - f1 
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "auc"
+    - "log_loss" 

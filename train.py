@@ -8,6 +8,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import json
 
 from models.avff_model import get_model
 from utils.data_utils import create_data_loaders
@@ -31,10 +32,15 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
     all_preds = []
     all_labels = []
     
+    # Get initial GPU memory usage
+    if torch.cuda.is_available():
+        initial_memory = torch.cuda.memory_allocated() / 1024**2  # Convert to MB
+        print(f"\nInitial GPU Memory: {initial_memory:.2f} MB")
+    
     for frames, audio, labels in tqdm(train_loader, desc='Training'):
         frames = frames.to(device)
         audio = audio.to(device)
-        labels = labels.to(device)
+        labels = labels.to(device).unsqueeze(1)  # Add extra dimension to match model output
         
         optimizer.zero_grad()
         outputs = model(frames, audio)
@@ -47,6 +53,16 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         preds = (outputs > 0.5).float()
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
+        
+        # Log GPU memory usage every 10 batches
+        if torch.cuda.is_available() and len(all_preds) % (10 * train_loader.batch_size) == 0:
+            current_memory = torch.cuda.memory_allocated() / 1024**2
+            print(f"\nCurrent GPU Memory: {current_memory:.2f} MB")
+    
+    # Get final GPU memory usage
+    if torch.cuda.is_available():
+        final_memory = torch.cuda.memory_allocated() / 1024**2
+        print(f"\nFinal GPU Memory: {final_memory:.2f} MB")
     
     metrics = {
         'loss': total_loss / len(train_loader),
@@ -68,7 +84,7 @@ def validate(model, val_loader, criterion, device):
         for frames, audio, labels in tqdm(val_loader, desc='Validation'):
             frames = frames.to(device)
             audio = audio.to(device)
-            labels = labels.to(device)
+            labels = labels.to(device).unsqueeze(1)  # Add extra dimension to match model output
             
             outputs = model(frames, audio)
             loss = criterion(outputs, labels)
@@ -94,6 +110,7 @@ def main():
     
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
     
     # Create model
     model = get_model(num_classes=1)
@@ -103,13 +120,51 @@ def main():
     if args.checkpoint:
         checkpoint = torch.load(args.checkpoint)
         model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Loaded checkpoint from {args.checkpoint}")
+    
+    # Load metadata
+    with open(config['data']['train_labels'], 'r') as f:
+        metadata = json.load(f)
+    print(f"Loaded metadata with {len(metadata)} entries")
+    
+    # Get processed video directories and labels
+    processed_dir = config['data']['train_videos']
+    train_videos = []
+    train_labels = []
+    
+    for filename, info in metadata.items():
+        video_name = os.path.splitext(filename)[0]
+        video_dir = os.path.join(processed_dir, video_name)
+        
+        # Only include videos that were successfully processed
+        if os.path.exists(os.path.join(video_dir, 'frames.pt')) and \
+           os.path.exists(os.path.join(video_dir, 'audio.pt')):
+            train_videos.append(video_dir)
+            train_labels.append(1 if info['label'] == 'FAKE' else 0)
+    
+    print(f"Found {len(train_videos)} processed videos")
+    
+    # Split into train/val
+    num_val = int(len(train_videos) * 0.1)  # 10% for validation
+    indices = list(range(len(train_videos)))
+    np.random.shuffle(indices)
+    
+    val_indices = indices[:num_val]
+    train_indices = indices[num_val:]
+    
+    val_videos = [train_videos[i] for i in val_indices]
+    val_labels = [train_labels[i] for i in val_indices]
+    train_videos = [train_videos[i] for i in train_indices]
+    train_labels = [train_labels[i] for i in train_indices]
+    
+    print(f"Training on {len(train_videos)} videos, validating on {len(val_videos)} videos")
     
     # Create data loaders
     train_loader, val_loader = create_data_loaders(
-        train_videos=config['data']['train_videos'],
-        train_labels=config['data']['train_labels'],
-        val_videos=config['data']['val_videos'],
-        val_labels=config['data']['val_labels'],
+        train_videos=train_videos,
+        train_labels=train_labels,
+        val_videos=val_videos,
+        val_labels=val_labels,
         batch_size=config['training']['batch_size'],
         num_workers=config['training']['num_workers'],
         frame_count=config['data']['frame_count'],
