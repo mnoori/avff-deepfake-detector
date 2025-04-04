@@ -165,6 +165,13 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
         train_metrics['recall'].append(recall_score(train_labels, train_preds))
         train_metrics['accuracy'].append(accuracy_score(train_labels, train_preds))
         
+        # Log training metrics
+        logging.info(f"Training metrics - Loss: {train_metrics['loss'][-1]:.4f}, "
+                    f"F1: {train_metrics['f1'][-1]:.4f}, "
+                    f"Precision: {train_metrics['precision'][-1]:.4f}, "
+                    f"Recall: {train_metrics['recall'][-1]:.4f}, "
+                    f"Accuracy: {train_metrics['accuracy'][-1]:.4f}")
+        
         # Validation phase
         model.eval()
         val_loss = 0
@@ -191,6 +198,13 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
         val_metrics['precision'].append(precision_score(val_labels, val_preds))
         val_metrics['recall'].append(recall_score(val_labels, val_preds))
         val_metrics['accuracy'].append(accuracy_score(val_labels, val_preds))
+        
+        # Log validation metrics
+        logging.info(f"Validation metrics - Loss: {val_metrics['loss'][-1]:.4f}, "
+                    f"F1: {val_metrics['f1'][-1]:.4f}, "
+                    f"Precision: {val_metrics['precision'][-1]:.4f}, "
+                    f"Recall: {val_metrics['recall'][-1]:.4f}, "
+                    f"Accuracy: {val_metrics['accuracy'][-1]:.4f}")
         
         # Update learning rate
         scheduler.step()
