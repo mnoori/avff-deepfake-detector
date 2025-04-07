@@ -3,7 +3,7 @@
 ## Training Overview
 - Model: AVFF (Audio-Visual Feature Fusion)
 - Dataset: DFDC (DeepFake Detection Challenge)
-- Training Duration: 21 epochs (Early stopping triggered)
+- Training Duration: 21 epochs
 - Hardware: NVIDIA GeForce RTX 4070 Laptop GPU (8188MB)
 
 ## Dataset Statistics
@@ -16,47 +16,47 @@
 ### Loss Progression
 ```
 Epoch   Training Loss   Validation Loss
-1       0.693          0.693
-5       0.580          0.562
-10      0.510          0.495
-15      0.465          0.482
-20      0.450          0.485
-21      0.448          0.488 (Early Stop)
+1       0.545          0.452
+5       0.401          0.512
+10      0.325          0.678
+15      0.278          0.812
+20      0.255          0.934
+21      0.249          0.967
 ```
 
 ![Training and Validation Loss](assets/training_loss.png)
 
 The loss curves show:
-- Initial rapid decrease in both training and validation loss
-- Convergence around epoch 15
-- Slight validation loss increase after epoch 15, triggering early stopping
-- Final training loss: 0.448
-- Best validation loss: 0.482
+- Initial rapid decrease in training loss from 0.545 to 0.249
+- Validation loss increases from 0.452 to 0.967, indicating overfitting
+- Clear divergence between training and validation loss after epoch 5
+- Final training loss: 0.249
+- Best validation loss: 0.452 (epoch 1)
 
 ### Performance Metrics Evolution
 
 #### F1 Score Progression
 ```
 Epoch   Training F1    Validation F1
-1       0.512         0.508
-5       0.642         0.635
-10      0.698         0.682
-15      0.725         0.710
-20      0.735         0.705
-21      0.738         0.702
+1       0.866         0.897
+5       0.892         0.875
+10      0.908         0.856
+15      0.918         0.841
+20      0.925         0.828
+21      0.928         0.822
 ```
 
 ![F1 Score Evolution](assets/f1_score.png)
 
 #### Precision and Recall
 ```
-Epoch   Val Precision    Val Recall
-1       0.510           0.506
-5       0.638           0.632
-10      0.685           0.679
-15      0.712           0.708
-20      0.708           0.702
-21      0.705           0.699
+Epoch   Train Precision  Train Recall    Val Precision    Val Recall
+1       0.804           0.938           0.812            1.000
+5       0.845           0.945           0.818            0.942
+10      0.872           0.948           0.822            0.894
+15      0.888           0.950           0.825            0.858
+20      0.898           0.952           0.827            0.829
+21      0.904           0.953           0.828            0.815
 ```
 
 ![Precision-Recall Curves](assets/precision_recall.png)
