@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import log_loss, f1_score, precision_score, recall_score, accuracy_score
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -13,11 +14,20 @@ import numpy as np
 from typing import Dict, List, Tuple
 import time
 import json
+import warnings
+
+# Filter out FutureWarnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 from avff.datasets.dfdc import DFDCDataset
 from avff.models import AVFFModel
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging with a cleaner format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 class EarlyStopping:
     def __init__(self, patience: int = 20, min_delta: float = 0.001):
@@ -68,6 +78,12 @@ def setup_device():
 def train_model(model, train_loader, val_loader, num_epochs, device, output_dir, config, start_epoch=0):
     os.makedirs(output_dir, exist_ok=True)
     
+    # Initialize TensorBoard writer
+    tensorboard_dir = os.path.join(output_dir, 'tensorboard')
+    os.makedirs(tensorboard_dir, exist_ok=True)
+    writer = SummaryWriter(tensorboard_dir)
+    logging.info(f"TensorBoard logs will be saved to: {tensorboard_dir}")
+    
     # Initialize metrics storage
     train_metrics = {
         'loss': [], 'f1': [], 'precision': [], 'recall': [], 'accuracy': []
@@ -92,7 +108,9 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
     
     # Training loop
     for epoch in range(start_epoch, num_epochs):
+        logging.info(f"\n{'='*50}")
         logging.info(f"Epoch {epoch+1}/{num_epochs}")
+        logging.info(f"{'='*50}")
         
         # Training phase
         model.train()
@@ -102,17 +120,22 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
         train_labels = []
         
         # Initialize progress tracking
-        start_time = time.time()
-        last_log_time = start_time
-        train_progress = tqdm(train_loader, desc=f"Training Epoch {epoch+1}")
+        train_progress = tqdm(
+            train_loader,
+            desc=f"Training",
+            ncols=100,
+            leave=True,
+            unit='batch',
+            bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+        )
         
         for batch_idx, batch in enumerate(train_progress):
             # Forward pass
-            outputs = model(batch['audio_features'].to(device), batch['video_frames'].to(device))
+            outputs = model(batch['video'].to(device), batch['audio'].to(device))
             labels = batch['label'].to(device)
             
             # Compute loss
-            loss = nn.CrossEntropyLoss()(outputs, labels)
+            loss = nn.CrossEntropyLoss()(outputs['logits'], labels)
             
             # Backward pass
             loss.backward()
@@ -127,50 +150,42 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
             train_batches += 1
             
             # Store predictions and labels
-            preds = torch.argmax(outputs, dim=1)
+            preds = torch.argmax(outputs['logits'], dim=1)
             train_preds.extend(preds.cpu().numpy())
             train_labels.extend(labels.cpu().numpy())
             
-            # Clear intermediate variables
-            del outputs, loss
-            torch.cuda.empty_cache()
+            # Log batch metrics to TensorBoard
+            global_step = epoch * len(train_loader) + batch_idx
+            writer.add_scalar('Batch/train_loss', loss.item(), global_step)
+            writer.add_scalar('Batch/learning_rate', scheduler.get_last_lr()[0], global_step)
             
-            # Calculate processing speed and memory usage
-            current_time = time.time()
-            if current_time - last_log_time > 5.0:  # Log every 5 seconds
-                elapsed_time = current_time - start_time
-                samples_processed = batch_idx * config['training']['batch_size']
-                samples_per_second = samples_processed / elapsed_time
-                
-                gpu_memory_used = torch.cuda.memory_allocated() / 1024**2
-                gpu_memory_cached = torch.cuda.memory_reserved() / 1024**2
-                
-                logging.info(
-                    f"Speed: {samples_per_second:.1f} samples/sec | "
-                    f"GPU Memory: Used={gpu_memory_used:.0f}MB, Cached={gpu_memory_cached:.0f}MB | "
-                    f"Loss: {train_loss/train_batches:.4f}"
-                )
-                last_log_time = current_time
-            
-            # Update progress bar
+            # Update progress bar with more metrics
             train_progress.set_postfix({
                 'loss': f"{train_loss/train_batches:.4f}",
-                'lr': f"{scheduler.get_last_lr()[0]:.2e}"
+                'lr': f"{scheduler.get_last_lr()[0]:.2e}",
+                'gpu': f"{torch.cuda.memory_allocated()/1024**2:.0f}MB"
             })
         
-        # Calculate training metrics
-        train_metrics['loss'].append(train_loss / train_batches)
-        train_metrics['f1'].append(f1_score(train_labels, train_preds))
-        train_metrics['precision'].append(precision_score(train_labels, train_preds))
-        train_metrics['recall'].append(recall_score(train_labels, train_preds))
-        train_metrics['accuracy'].append(accuracy_score(train_labels, train_preds))
+        # Calculate and log epoch training metrics
+        epoch_train_loss = train_loss / train_batches
+        epoch_train_f1 = f1_score(train_labels, train_preds)
+        epoch_train_precision = precision_score(train_labels, train_preds)
+        epoch_train_recall = recall_score(train_labels, train_preds)
+        epoch_train_accuracy = accuracy_score(train_labels, train_preds)
         
-        # Log training metrics
-        logging.info(f"Training metrics - Loss: {train_metrics['loss'][-1]:.4f}, "
-                    f"F1: {train_metrics['f1'][-1]:.4f}, "
-                    f"Precision: {train_metrics['precision'][-1]:.4f}, "
-                    f"Recall: {train_metrics['recall'][-1]:.4f}, "
-                    f"Accuracy: {train_metrics['accuracy'][-1]:.4f}")
+        # Log training metrics to TensorBoard
+        writer.add_scalar('Epoch/train_loss', epoch_train_loss, epoch)
+        writer.add_scalar('Epoch/train_f1', epoch_train_f1, epoch)
+        writer.add_scalar('Epoch/train_precision', epoch_train_precision, epoch)
+        writer.add_scalar('Epoch/train_recall', epoch_train_recall, epoch)
+        writer.add_scalar('Epoch/train_accuracy', epoch_train_accuracy, epoch)
+        
+        # Store metrics
+        train_metrics['loss'].append(epoch_train_loss)
+        train_metrics['f1'].append(epoch_train_f1)
+        train_metrics['precision'].append(epoch_train_precision)
+        train_metrics['recall'].append(epoch_train_recall)
+        train_metrics['accuracy'].append(epoch_train_accuracy)
         
         # Validation phase
         model.eval()
@@ -179,38 +194,66 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
         val_preds = []
         val_labels = []
         
+        val_progress = tqdm(
+            val_loader,
+            desc="Validation",
+            ncols=100,
+            leave=True,
+            unit='batch',
+            bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+        )
+        
         with torch.no_grad():
-            for batch in tqdm(val_loader, desc="Validation"):
-                outputs = model(batch['audio_features'].to(device), batch['video_frames'].to(device))
+            for batch in val_progress:
+                outputs = model(batch['video'].to(device), batch['audio'].to(device))
                 labels = batch['label'].to(device)
                 
-                loss = nn.CrossEntropyLoss()(outputs, labels)
+                loss = nn.CrossEntropyLoss()(outputs['logits'], labels)
                 val_loss += loss.item()
                 val_batches += 1
                 
-                preds = torch.argmax(outputs, dim=1)
+                preds = torch.argmax(outputs['logits'], dim=1)
                 val_preds.extend(preds.cpu().numpy())
                 val_labels.extend(labels.cpu().numpy())
+                
+                # Update progress bar
+                val_progress.set_postfix({
+                    'loss': f"{val_loss/val_batches:.4f}"
+                })
         
-        # Calculate validation metrics
-        val_metrics['loss'].append(val_loss / val_batches)
-        val_metrics['f1'].append(f1_score(val_labels, val_preds))
-        val_metrics['precision'].append(precision_score(val_labels, val_preds))
-        val_metrics['recall'].append(recall_score(val_labels, val_preds))
-        val_metrics['accuracy'].append(accuracy_score(val_labels, val_preds))
+        # Calculate and log validation metrics
+        epoch_val_loss = val_loss / val_batches
+        epoch_val_f1 = f1_score(val_labels, val_preds)
+        epoch_val_precision = precision_score(val_labels, val_preds)
+        epoch_val_recall = recall_score(val_labels, val_preds)
+        epoch_val_accuracy = accuracy_score(val_labels, val_preds)
         
-        # Log validation metrics
-        logging.info(f"Validation metrics - Loss: {val_metrics['loss'][-1]:.4f}, "
-                    f"F1: {val_metrics['f1'][-1]:.4f}, "
-                    f"Precision: {val_metrics['precision'][-1]:.4f}, "
-                    f"Recall: {val_metrics['recall'][-1]:.4f}, "
-                    f"Accuracy: {val_metrics['accuracy'][-1]:.4f}")
+        # Log validation metrics to TensorBoard
+        writer.add_scalar('Epoch/val_loss', epoch_val_loss, epoch)
+        writer.add_scalar('Epoch/val_f1', epoch_val_f1, epoch)
+        writer.add_scalar('Epoch/val_precision', epoch_val_precision, epoch)
+        writer.add_scalar('Epoch/val_recall', epoch_val_recall, epoch)
+        writer.add_scalar('Epoch/val_accuracy', epoch_val_accuracy, epoch)
+        
+        # Store metrics
+        val_metrics['loss'].append(epoch_val_loss)
+        val_metrics['f1'].append(epoch_val_f1)
+        val_metrics['precision'].append(epoch_val_precision)
+        val_metrics['recall'].append(epoch_val_recall)
+        val_metrics['accuracy'].append(epoch_val_accuracy)
+        
+        # Log epoch summary
+        logging.info(
+            f"\nEpoch {epoch+1}/{num_epochs} Summary:"
+            f"\nTrain: loss={epoch_train_loss:.4f}, f1={epoch_train_f1:.4f}, acc={epoch_train_accuracy:.4f}"
+            f"\nVal  : loss={epoch_val_loss:.4f}, f1={epoch_val_f1:.4f}, acc={epoch_val_accuracy:.4f}"
+        )
         
         # Update learning rate
         scheduler.step()
         
         # Save model checkpoint
-        if val_metrics['f1'][-1] > max(val_metrics['f1'][:-1] or [0]):
+        if epoch_val_f1 > max(val_metrics['f1'][:-1] or [0]):
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -220,20 +263,21 @@ def train_model(model, train_loader, val_loader, num_epochs, device, output_dir,
                 'val_metrics': val_metrics,
                 'config': config
             }, os.path.join(output_dir, 'best_model.pth'))
-            logging.info("Saved best model checkpoint")
+            logging.info("✓ Saved best model checkpoint")
         
         # Plot metrics
         plot_metrics(train_metrics, val_metrics, output_dir)
         
         # Check for early stopping
-        if early_stopping(val_metrics['loss'][-1]):
-            logging.info("Early stopping triggered")
+        if early_stopping(epoch_val_loss):
+            logging.info("! Early stopping triggered")
             break
         
         # Clear memory at end of epoch
         if device.type == 'cuda':
             torch.cuda.empty_cache()
     
+    writer.close()
     return train_metrics, val_metrics
 
 def plot_metrics(train_metrics: Dict[str, List[float]], val_metrics: Dict[str, List[float]], output_dir: str):
@@ -305,7 +349,7 @@ def evaluate_model(model, test_loader, device):
             labels = batch['label'].to(device)
             
             outputs = model(video_data, audio_data)
-            preds = (outputs > 0.5).float()
+            preds = (outputs['logits'] > 0.5).float()
             
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio and Video Deepfake Detector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #e5e7eb;
+        }
+        
+        .progress {
+            height: 6px;
+            width: 100%;
+            background-color: #374151;
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: #6366f1;
+            transition: width 0.5s ease;
+        }
+        
+        .media-preview {
+            max-height: 280px;
+            margin: 0 auto;
+            display: block;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        
+        .media-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            max-height: 280px;
+            overflow: hidden;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        
+        .upload-area {
+            transition: all 0.3s ease;
+            border: 2px dashed #4b5563;
+        }
+        
+        .upload-area:hover, .upload-area.drag-over {
+            border-color: #6366f1;
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+            }
+            
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+            }
+            
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+            }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .audio-container {
+            background: linear-gradient(to right, #4338ca, #6366f1);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .audio-container audio {
+            width: 100%;
+            filter: invert(100%);
+        }
+        
+        .waveform {
+            height: 60px;
+            width: 100%;
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSI2MHB4IiB2aWV3Qm94PSIwIDAgMTIwMCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik0wIDcuNUMxMDAgNy41IDIwMCA3LjUgMzAwIDcuNVM0MDAgMTUgNTAwIDE1IDYwMCA3LjUgNzAwIDcuNSA4MDAgMTUgOTAwIDE1IDEwMDAgNy41IDExMDAgNy41IDEyMDAgMTUgMTMwMCAxNSAxNDAwIDcuNSAxNTAwIDcuNSAxNjAwIDE1IDE3MDAgMTUgMTgwMCA3LjUgMTkwMCA3LjUgMjAwMCAxNSAyMTAwIDE1IHYzMGMtMTAwIDAtMjAwIDAtMzAwIDBTMTcwMCAzNy41IDE2MDAgMzcuNSAxNDAwIDQ1IDEzMDAgNDUgMTEwMCAzNy41IDEwMDAgMzcuNSA4MDAgNDUgNzAwIDQ1IDUwMCAzNy41IDQwMCAzNy41IDIwMCA0NSAxMDAgNDUgMCAzNy41IHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4yIi8+Cjwvc3ZnPg==');
+            background-size: cover;
+            margin-top: 10px;
+        }
+        
+        .result-card {
+            transition: all 0.3s ease;
+        }
+        
+        .result-card.fake {
+            border-left: 4px solid #ef4444;
+        }
+        
+        .result-card.real {
+            border-left: 4px solid #10b981;
+        }
+        
+        .btn {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.5);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1, 1) translate(-50%);
+            transform-origin: 50% 50%;
+        }
+        
+        .btn:focus:not(:active)::after {
+            animation: ripple 1s ease-out;
+        }
+        
+        @keyframes ripple {
+            0% {
+                transform: scale(0, 0);
+                opacity: 0.5;
+            }
+            20% {
+                transform: scale(25, 25);
+                opacity: 0.3;
+            }
+            100% {
+                opacity: 0;
+                transform: scale(40, 40);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-400 mb-2">Audio & Video Deepfake Detector</h1>
+            <p class="text-gray-400">Upload media to detect AI-generated content</p>
+        </div>
+        
+        <div class="bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
+            <div class="mb-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold mr-3">1</div>
+                    <h2 class="text-xl font-semibold text-white">Upload Media</h2>
+                </div>
+                
+                <div id="upload-area" class="upload-area rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer">
+                    <div class="w-16 h-16 rounded-full bg-indigo-900/50 flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                    </div>
+                    <p class="text-gray-300 font-medium">Drag & drop or click to upload</p>
+                    <p class="text-sm text-gray-500 mt-1">Supports MP4, MP3, WAV (max 50MB)</p>
+                    <input id="file-upload" type="file" class="hidden" accept="video/mp4,audio/mpeg,audio/wav">
+                </div>
+                
+                <div id="media-preview" class="mt-6 hidden fade-in">
+                    <div class="flex items-center mb-3">
+                        <div id="media-type-icon" class="w-5 h-5 mr-2 text-indigo-400"></div>
+                        <div id="file-name" class="text-sm font-medium text-gray-300 truncate"></div>
+                        <div id="file-size" class="text-xs text-gray-500 ml-2"></div>
+                    </div>
+                    
+                    <div class="media-container">
+                        <!-- Video preview -->
+                        <video id="video-player" controls class="media-preview hidden"></video>
+                        
+                        <!-- Audio preview -->
+                        <div id="audio-container" class="audio-container w-full hidden">
+                            <audio id="audio-player" controls></audio>
+                            <div class="waveform"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="error-message" class="mt-4 text-sm text-red-400 bg-red-900/30 p-3 rounded-lg hidden">
+                    <div class="flex items-start">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold mr-3">2</div>
+                <h2 class="text-xl font-semibold text-white">Analyze</h2>
+            </div>
+            
+            <button id="analyze-btn" class="btn w-full bg-indigo-600 text-white py-3 px-4 rounded-xl hover:bg-indigo-700 disabled:bg-indigo-900 disabled:text-indigo-300 disabled:cursor-not-allowed font-medium" disabled>
+                Detect Deepfake
+            </button>
+            
+            <div id="loading" class="mt-6 hidden fade-in">
+                <div class="flex items-center mb-3">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-400 mr-3"></div>
+                    <span id="processing-stage" class="text-sm font-medium text-gray-300">Analyzing content...</span>
+                </div>
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar" style="width: 10%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="results" class="result-card bg-gray-800 rounded-xl shadow-lg p-6 hidden fade-in">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold mr-3">3</div>
+                <h2 class="text-xl font-semibold text-white">Results</h2>
+            </div>
+            
+            <div id="result-content" class="p-4 rounded-lg bg-gray-900">
+                <div id="result-header" class="flex items-center gap-3 mb-6"></div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-400">Confidence score</span>
+                            <span id="confidence-value" class="text-sm font-bold"></span>
+                        </div>
+                        <div class="progress">
+                            <div id="confidence-bar" class="progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="result-explanation" class="text-sm text-gray-400 mt-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                        <!-- Explanation will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-500">
+                This tool analyzes audio and video files for potential deepfake manipulation.<br>
+                Results are for informational purposes only and may not be 100% accurate.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        const fileUpload = document.getElementById('file-upload');
+        const uploadArea = document.getElementById('upload-area');
+        const mediaPreview = document.getElementById('media-preview');
+        const videoPlayer = document.getElementById('video-player');
+        const audioPlayer = document.getElementById('audio-player');
+        const audioContainer = document.getElementById('audio-container');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const mediaTypeIcon = document.getElementById('media-type-icon');
+        const errorMessage = document.getElementById('error-message');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const loading = document.getElementById('loading');
+        const processingStage = document.getElementById('processing-stage');
+        const progressBar = document.getElementById('progress-bar');
+        const results = document.getElementById('results');
+        const resultHeader = document.getElementById('result-header');
+        const resultContent = document.getElementById('result-content');
+        const confidenceValue = document.getElementById('confidence-value');
+        const confidenceBar = document.getElementById('confidence-bar');
+        const resultExplanation = document.getElementById('result-explanation');
+        
+        let selectedFile = null;
+        let mediaType = null; // 'audio' or 'video'
+        
+        // Handle file selection
+        uploadArea.addEventListener('click', () => {
+            fileUpload.click();
+        });
+        
+        // Handle drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('drag-over');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileUpload.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            if (!file) return;
+            
+            // Reset UI
+            errorMessage.classList.add('hidden');
+            videoPlayer.classList.add('hidden');
+            audioContainer.classList.add('hidden');
+            results.classList.add('hidden');
+            
+            // Check file type
+            if (file.type.startsWith('video/')) {
+                mediaType = 'video';
+                mediaTypeIcon.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                `;
+            } else if (file.type.startsWith('audio/')) {
+                mediaType = 'audio';
+                mediaTypeIcon.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                `;
+            } else {
+                showError('Please upload a video (MP4) or audio (MP3, WAV) file');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Create media preview
+            const url = URL.createObjectURL(file);
+            
+            if (mediaType === 'video') {
+                videoPlayer.src = url;
+                videoPlayer.classList.remove('hidden');
+            } else {
+                audioPlayer.src = url;
+                audioContainer.classList.remove('hidden');
+            }
+            
+            mediaPreview.classList.remove('hidden');
+            
+            // Show file info
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            
+            // Enable analyze button
+            analyzeBtn.disabled = false;
+            analyzeBtn.classList.add('pulse');
+            
+            // Hide upload area
+            uploadArea.classList.add('hidden');
+            
+            // Show "Upload another" button
+            const uploadAnotherBtn = document.createElement('button');
+            uploadAnotherBtn.className = 'mt-4 text-sm text-indigo-400 hover:text-indigo-300 flex items-center';
+            uploadAnotherBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Upload another file
+            `;
+            uploadAnotherBtn.addEventListener('click', () => {
+                // Reset UI
+                mediaPreview.classList.add('hidden');
+                uploadArea.classList.remove('hidden');
+                analyzeBtn.disabled = true;
+                analyzeBtn.classList.remove('pulse');
+                uploadAnotherBtn.remove();
+                selectedFile = null;
+            });
+            
+            mediaPreview.appendChild(uploadAnotherBtn);
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // Handle analyze button click
+        analyzeBtn.addEventListener('click', async () => {
+            if (!selectedFile) {
+                showError('Please select a file to analyze');
+                return;
+            }
+            
+            // Show loading
+            loading.classList.remove('hidden');
+            results.classList.add('hidden');
+            analyzeBtn.disabled = true;
+            analyzeBtn.classList.remove('pulse');
+            
+            // Simulate processing stages
+            startProgressSimulation();
+            
+            try {
+                const result = await detectDeepfake(selectedFile);
+                showResults(result);
+            } catch (error) {
+                showError(error.message || 'Error analyzing the file');
+                console.error(error);
+            } finally {
+                loading.classList.add('hidden');
+                analyzeBtn.disabled = false;
+            }
+        });
+        
+        // Function to simulate progress
+        function startProgressSimulation() {
+            const videoStages = [
+                "Detecting faces...",
+                "Extracting frames...",
+                "Processing audio...",
+                "Analyzing content...",
+                "Finalizing results..."
+            ];
+            
+            const audioStages = [
+                "Extracting audio features...",
+                "Analyzing waveform...",
+                "Checking spectral patterns...",
+                "Detecting anomalies...",
+                "Finalizing results..."
+            ];
+            
+            const stages = mediaType === 'video' ? videoStages : audioStages;
+            
+            let progress = 10;
+            let stageIndex = 0;
+            
+            const interval = setInterval(() => {
+                progress += 5;
+                if (progress >= 95) {
+                    clearInterval(interval);
+                    return;
+                }
+                
+                if (progress > 30 && stageIndex < 1) {
+                    stageIndex = 1;
+                } else if (progress > 50 && stageIndex < 2) {
+                    stageIndex = 2;
+                } else if (progress > 70 && stageIndex < 3) {
+                    stageIndex = 3;
+                } else if (progress > 85 && stageIndex < 4) {
+                    stageIndex = 4;
+                }
+                
+                processingStage.textContent = stages[stageIndex];
+                progressBar.style.width = `${progress}%`;
+            }, 300);
+        }
+        
+        // Function to detect deepfake
+        async function detectDeepfake(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('mediaType', mediaType);
+            
+            const response = await fetch('http://localhost:5000/analyze', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                let errorMessage = 'Unknown error occurred';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || `API error (${response.status})`;
+                } catch (e) {
+                    errorMessage = `API error (${response.status})`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+            return await response.json();
+        }
+        
+        // Function to show error
+        function showError(message) {
+            errorMessage.querySelector('span').textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+        
+        // Function to show results
+        function showResults(result) {
+            results.classList.remove('hidden');
+            
+            // Update result card style
+            if (result.isDeepfake) {
+                resultContent.classList.add('fake');
+                resultContent.classList.remove('real');
+            } else {
+                resultContent.classList.add('real');
+                resultContent.classList.remove('fake');
+            }
+            
+            // Update result header
+            resultHeader.innerHTML = result.isDeepfake 
+                ? `
+                    <div class="w-12 h-12 rounded-full bg-red-900/30 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-red-500">Potential Deepfake Detected</h3>
+                        <p class="text-sm text-gray-400">This ${mediaType} shows signs of AI manipulation</p>
+                    </div>
+                `
+                : `
+                    <div class="w-12 h-12 rounded-full bg-green-900/30 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-green-500">No Manipulation Detected</h3>
+                        <p class="text-sm text-gray-400">This ${mediaType} appears to be authentic</p>
+                    </div>
+                `;
+            
+            // Update confidence score with animation
+            confidenceValue.textContent = `${result.confidence.toFixed(2)}%`;
+            
+            // Animate the confidence bar
+            setTimeout(() => {
+                confidenceBar.style.width = `${result.confidence}%`;
+                confidenceBar.style.backgroundColor = result.isDeepfake ? '#ef4444' : '#10b981';
+            }, 100);
+            
+            // Add explanation
+            resultExplanation.innerHTML = result.isDeepfake 
+                ? `
+                    <p class="mb-2"><strong>What we found:</strong></p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Inconsistencies in ${mediaType === 'video' ? 'facial movements' : 'audio patterns'}</li>
+                        <li>Unnatural ${mediaType === 'video' ? 'visual artifacts' : 'sound transitions'}</li>
+                        <li>Signs of AI-generated content</li>
+                    </ul>
+                `
+                : `
+                    <p class="mb-2"><strong>Analysis results:</strong></p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>No significant anomalies detected</li>
+                        <li>Natural ${mediaType === 'video' ? 'visual patterns' : 'audio characteristics'}</li>
+                        <li>Consistent with authentic content</li>
+                    </ul>
+                `;
+            
+            // Scroll to results
+            results.scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
