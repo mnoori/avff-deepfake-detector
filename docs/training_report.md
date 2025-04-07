@@ -159,8 +159,10 @@ Epoch   Val Precision    Val Recall
 avff-deepfake-detector-1/
 ├── docs/
 │   ├── assets/
-│   │   ├── learning_curves.png
-│   │   └── training_metrics.png
+│   │   ├── training_loss.png
+│   │   ├── f1_score.png
+│   │   ├── precision_recall.png
+│   │   └── learning_rate.png
 │   └── training_report.md
 ├── outputs/
 │   └── dfdc/
